@@ -18,7 +18,10 @@ Using the webpage:
      
   Option #2: Sign in
     - Press the "User Login" button located at the top right of the webpage. 
-    - If a correcr username is inputted, all of the users flights will be 
+    - If a correct username is inputted, a list of the users flights will be displayed. Each listed flight will bea clickable     
+      link. Clicking on a flihgt will redirect the page to the analysis of that flight log. Additionally, safety data will be
+      displayed towards the bottom. Once a flight log is loaded, a list of the users flights will still be lsited at the 
+      bottom.
       
     
 
