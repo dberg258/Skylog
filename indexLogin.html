@@ -1,0 +1,451 @@
+<head>
+  	<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+	<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+	<link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+	<script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+	<link rel="stylesheet" href="/web/style.css"></style>
+	<title>Skylog Dashboard</title>
+</head>
+
+<script>
+        function setupFileInput(){
+            $('#login').append('\
+                                <div>\
+                                    <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label" style="width: 40%; margin-left: 1%">\
+                                        <input class="mdl-textfield__input" type="text" id="filepath">\
+                                        <label class="mdl-textfield__label" for="sample3">File Path</label>\
+                                    </div>\
+                                    <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label" style="width: 30%; margin-left: 1%">\
+                                        <input class="mdl-textfield__input" type="text" id="lambda">\
+                                        <label class="mdl-textfield__label" for="sample3">Enter Lambda</label>\
+                                    </div>\
+                                    <a onclick="getElements(0,0)" class="mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect">\
+                                        Enter\
+                                    </a>\
+                                    <a onclick="getElements(0,2);topFunction()" class="mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect">\
+                                        Load Random Flight\
+                                    </a>\
+                                </div>\
+                                <div class="mdl-card__actions mdl-card--border">\
+                                    <label id="error"></label>\
+                                </div>\
+            ')
+        }
+</script>
+
+
+<body>
+	<div class="mdl-card__title">
+	    <h2 class="mdl-card__title-text">Skylog Dashboard</h2>
+	</div>
+	<div class="mdl-card__menu">
+        <a onclick="window.location.reload()" class="mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect">
+            User Login
+        </a>
+        <button class="mdl-button mdl-button--icon mdl-js-button mdl-js-ripple-effect">
+            <img src="/web/skywatch-small.png"></img>
+        </button>
+    </div>
+	<div id = "login" class="mdl-card__actions mdl-card--border" style="padding-bottom:1%">
+        <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label" style="width: 40%; margin-left: .8%">
+            <input class="mdl-textfield__input" type="text" id="username">
+            <label class="mdl-textfield__label" for="sample3">Username</label>
+        </div>
+        <a onclick="login()" class="mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect">
+            View Flights
+        </a>
+	    <script>
+	        setupFileInput()
+	    </script>
+    </div>
+</body>
+
+<script>
+    username = ''
+    signedIn = 0
+    fontSize = 14
+    lats = null;
+    longs = null
+    isHovering = false
+    markedPoint = {
+                type: 'scattermapbox',
+                mode: 'markers',
+                hoverinfo: 'text',
+                marker: {
+                    size: 15,
+                    symbol: 'monument'
+                },
+                lat: null,
+                lon: null,
+                name: 'Hover Dot'
+               }
+
+    url = "https://user.skywatch.ai/skylog_request"
+    loginUrl = "https://user.skywatch.ai/skylog_login"
+    safetyDataUrl = "https://user.skywatch.ai/skylog_safety"
+
+    <!--url = "http://13.90.242.96/skylog_request"-->
+    <!--loginUrl = "http://13.90.242.96/skylog_login"-->
+
+    <!--url = "http://localhost:8890/skylog_request"-->
+    <!--loginUrl = "http://localhost:8890/skylog_login"-->
+    <!--safetyDataUrl = "http://localhost:8890/skylog_safety"-->
+
+    function setupGraph(data, layout){
+        Plotly.purge('graph')
+        Plotly.plot('graph', data, layout);
+
+        var graph = document.getElementById('graph')
+        graph.on('plotly_hover', function(data){
+               if (longs == undefined || lats == undefined){
+                    return;
+               }
+               markedLong = longs[data.points[0].pointNumber]
+               markedLat = lats[data.points[0].pointNumber]
+               markedPoint.lat = [markedLat]
+               markedPoint.lon = [markedLong]
+
+               if (isHovering){
+                    Plotly.deleteTraces('map', -1)
+               }
+               isHovering = true
+
+               Plotly.addTraces('map', markedPoint)
+        });
+    }
+
+    function setupMap(data, layout){
+        Plotly.purge('map');
+        Plotly.plot('map', data, layout);
+        console.log(data)
+        if (data != undefined && data[0] != undefined && 'lon' in data[0] && 'lat' in data[0]){
+            longs = data[0]['lon'];
+            lats = data[0]['lat'];
+        }
+        else{
+            longs = undefined;
+            lats = undefined;
+        }
+    }
+
+    function setupMetadataTable(metadata){
+        var header = ''
+        var body = ''
+        var printable = ''
+        for (var i = 0 ; i < metadata.length ; i++){
+            header += '<th class="mdl-data-table__cell--non-numeric" style="text-align: center">' + metadata[i][0] + '</th>'
+            body += '<td class="mdl-data-table__cell--non-numeric" style="text-align: center">' + metadata[i][1] + '</td>'
+            printable += metadata[i][0] + ': ' + metadata[i][1] + '\n'
+        }
+        $('#metadata-header').html(header)
+        $('#metadata-body').html(body)
+
+        $('#metadata-table').css('visibility', 'visible');
+
+        console.log(printable)
+    }
+
+    function setupSafetyScoreFeedback(data){
+        safetyScore = data['Score']
+
+        $('#safetyScore').append(
+                            '<div id="safetyScoreFeedback" style="width: 100%; float: center">\
+                                </br>\
+                                <table class="mdl-data-table mdl-js-data-table" border="1|0" style="float: center; width: 98%; margin-right: 1%; margin-left: 1%;">\
+                                    <thead>\
+                                        <tr id="safetyScoreFeedback-header">\
+                                            <th style="text-align: center; width: 50%; font-size:'+fontSize+'"><b><font color="green">Positive Feedback</font></b></th>\
+                                            <th style="text-align: center; width: 50%; font-size:'+fontSize+'"><b><font color="red">Negative Feedback</font></b></th>\
+                                        </tr>\
+                                    </thead>\
+                                    <tbody id="safetyScoreFeedback-body">\
+                                    </tbody>\
+                                </table>\
+                            </div>\
+        ')
+
+        positiveFeedback = data['Feedback']['PositiveFeedback']
+        negativeFeedback = data['Feedback']['NegativeFeedback']
+
+        positiveL = positiveFeedback.length
+        negativeL = negativeFeedback.length
+
+        var length = positiveL > negativeL ? positiveL : negativeL
+        var body = ''
+
+        for(var i = 0; i < length; i++){
+            body += '<tr><td style="text-align: center; width: 50%">'
+
+            if(i < positiveL){
+                body += positiveFeedback[i] + '</td>'
+            }
+            else{
+                body += '</td>'
+            }
+            if(i < negativeL){
+                body += '<td style="text-align: center; width: 50%">' + negativeFeedback[i] + '</td>'
+            }
+            else{
+                body += '<td style="text-align: center; width: 50%"></td>'
+            }
+
+            body += '</tr>'
+        }
+
+        $('#safetyScoreFeedback-body').html(body)
+    }
+
+	function setupSafetyScoreBreakdown(data){
+        $('#safetyScore').append(
+                            '<div id="safetyScoreBreakdown" style="width: 100%; float: center">\
+                                <h6 style="margin-left: 1%"><font color=#444444><b>Safety Score Breakdown:</b></font></h6>\
+                                <table class="mdl-data-table mdl-js-data-table" border="1|0" style="float: center; width: 98%; margin-right: 1%; margin-left: 1%;">\
+                                    <thead>\
+                                        <tr id="safetyScoreBreakdown-header">\
+                                            <th style="text-align: center; width: 20%; font-size:'+fontSize+'"><b>Category</b></th>\
+                                            <th style="text-align: center; width: 20%; font-size:'+fontSize+'"><b>Thresholds</b></th>\
+                                            <th style="text-align: center; width: 20%; font-size:'+fontSize+'"><b>Your Value</b></th>\
+                                            <th style="text-align: center; width: 20%; font-size:'+fontSize+'"><b>Scores</b></th>\
+                                            <th style="text-align: center; width: 20%; font-size:'+fontSize+'"><b>Your Score</b></th>\
+                                        </tr>\
+                                    </thead>\
+                                    <tbody id="safetyScoreBreakdown-body">\
+                                    </tbody>\
+                                </table>\
+                            </div>\
+        ')
+
+		var body = ''
+		var thresholds = ''
+		var value = ''
+
+        for(var key in data){
+        	if(key != "total" && key != "finalScore"){
+				values = data[key]
+
+				if(values['thresholds'].length == 2){
+					thresholds = "Mild: " + values['thresholds'][0] + "\xa0\xa0 | \xa0\xa0Severe: " + values['thresholds'][1]
+				}
+				else{
+					thresholds = values['thresholds']
+				}
+
+				if(values['value'].length > 5){
+					value = Math.round(values['value'] * 100) / 100
+				}
+				else{
+					value = values['value']
+				}
+
+				body += '<tr>' +
+						'<td style="text-align: center;">' + key + ':</td>' +
+						'<td style="text-align: center;">' + thresholds + '</td>' +
+						'<td style="text-align: center;">' + value + '</td>' +
+						'<td style="text-align: center;">(' + values['scores'] + ')</td>' +
+						'<td style="text-align: center;">' + values['finalScore'] + '</td>' +
+						'</tr>'
+			}
+        }
+
+        body += '<tr>' +
+                    '<td></td><td></td><td></td>' +
+                    '<td style="text-align: center"><b>Total: </b></td>' +
+                    '<td style="text-align: center;"><b>' + data['total'] + '</b></td>' +
+                '</tr>'
+
+        $('#safetyScoreBreakdown-body').html(body)
+	}
+
+    function setupFlightList(){
+		$('#login').append(
+					'<div id="flightList" style="width: 100%; float: center">\
+						<h6 style="margin-left: 1%"><font color=#444444><b>Stored Flights:</b></font></h6>\
+						<table class="mdl-data-table mdl-js-data-table" border="1|0" style="float: center; width: 30%; margin-left: 1%;">\
+							<thead>\
+								<tr id="flightList-header">\
+									<th style="text-align: center; font-size:'+fontSize+'"><b>Date</b></th>\
+									<th style="text-align: center; font-size:'+fontSize+'"><b>Time</b></th>\
+									<th style="text-align: center; font-size:'+fontSize+'"><b>File Name</b></th>\
+								</tr>\
+							</thead>\
+							<tbody id="flightList-body">\
+							</tbody>\
+						</table>\
+					</div>\
+		')
+
+		var body = ''
+
+        for(var key in flightLinks){
+            var value = flightLinks[key].toString()
+            body += '<tr>' +
+                    '<td style="text-align: center;">' + value.slice(4,6) + "/" + value.slice(6,8) + "/" + value.slice(0,4) + '</td>' +
+                    '<td style="text-align: center;">' + value.slice(8,10) + ":" + value.slice(10) + '</td>' +
+                    '<td style="text-align: center;">' + "<a href='#' onclick='getElements(this.innerHTML,1);event.preventDefault();topFunction()'>" + key + '</a></td>' +
+                    '</tr>'
+        }
+
+        $('#flightList-body').html(body)
+    }
+
+    function getElements(filePathInput, method){
+            $('#error').text("")
+            randomFlight = 0
+
+            if(method == 2){
+                filePath = ''
+                lambdaText = ''
+                randomFlight = 1
+            }
+            else if(method == 1){
+                filePath = filePathInput
+                lambdaText = ''
+            }
+            else if (method == 0) {
+                filePath = $('#filepath').val()
+                lambdaText = $('#lambda').val()
+            }
+
+            $('#login').html('')
+	        setupFileInput()
+
+            $('#login').append('\
+                                <div id="content">\
+                                </div>\
+                                <div id="filename">\
+                                </div>\
+                                <div id="graph" style="float: right; width: 50%"></div>\
+                                <div id="map" style="float: left; width: 50%"></div>\
+                                <br/>\
+                                <div id="metadata" style="overflow-x: auto; width: 99%; margin-right: 1%" >\
+                                    <table class="mdl-data-table mdl-js-data-table" style="float: center; visibility: hidden; margin-left: 1%; margin-right: 10px" id="metadata-table">\
+                                        <thead>\
+                                            <tr id="metadata-header">\
+                                            </tr>\
+                                        </thead>\
+                                        <tbody>\
+                                            <tr id="metadata-body">\
+                                            </tr>\
+                                        </tbody>\
+                                    </table>\
+                                </div>\
+                                <div id="safetyScore">\
+                                </div>\
+            ')
+
+            $('#content').html('<div class="spinner">\
+                                  <div class="rect1"></div>\
+                                  <div class="rect2"></div>\
+                                  <div class="rect3"></div>\
+                                  <div class="rect4"></div>\
+                                  <div class="rect5"></div>\
+                                </div>\
+            ')
+
+            isHovering = false
+            $('#error').text('')
+
+            $.get(url, {lambda: lambdaText, filepath: filePath, user: username, signedIn: signedIn, randomFlight: randomFlight}, function(data){
+                obj = $.parseJSON(data)
+
+                $('#content').html("")
+                $('#filename').html("<div id ='info' style='margin-left: 1.3%'><font color=#444444><b>Username:</b> " + obj['username'] + "</br><b>Filename:</b> " + obj['filename'] + "</font></div>")
+
+                graph_data = obj['graph']
+                setupGraph(graph_data['data'], graph_data['layout'])
+                setupMetadataTable(obj['safety-metadata'])
+                map_data = obj['map']
+                setupMap(map_data['data'], map_data['layout'])
+
+				$('#safetyScore').html('<div class="spinner2">\
+					  <div class="rect12"></div>\
+					  <div class="rect22"></div>\
+					  <div class="rect32"></div>\
+					  <div class="rect42"></div>\
+					  <div class="rect52"></div>\
+					</div>\
+            	')
+
+                $.get(safetyDataUrl, {filepath : obj['filename'][0]}, function(result){
+                	$('#safetyScore').html("")
+                	safetyScoreData = $.parseJSON(result)
+                	setupSafetyScoreFeedback(safetyScoreData['safetyScoreFeedback'])
+                	setupSafetyScoreBreakdown(safetyScoreData['safetyScoreBreakdown'])
+                	$('#info').append("</br><font color=#444444><b>Safety Score:</b> " + safetyScoreData['safetyScoreBreakdown']['finalScore']  + "</font>")
+                }).fail(function(data){
+                	$('#safetyScore').html("")
+                	var errorCode = data['status']
+                	if (errorCode == 405){
+                   		$('#error').text("Safety Data Missing.")
+                	}
+                	else{
+                    	$('#error').text("Problem Accessing Safety Data.")
+                	}
+                });
+            }).fail(function(data){
+                $('#content').html("")
+                var errorCode = data['status']
+                if (errorCode == 400){
+                    $('#error').text("File does not exist.")
+                }
+                else if (errorCode == 401){
+                    $('#error').text("Error with lambda expression.")
+                }
+                else if (errorCode == 403){
+                    $('#error').text("Flight does not belong to current user.")
+                }
+                else{
+                    $('#error').text("Server isn't available..")
+                }
+            });
+
+            if(signedIn == 1){
+                setupFlightList()
+            }
+    }
+
+    function login(){
+        usernameText = $('#username').val()
+        $('#error').text('')
+
+        $('#login').append(
+                            '<div id="spinner" class="spinner">\
+                                <div class="rect1"></div>\
+                                <div class="rect2"></div>\
+                                <div class="rect3"></div>\
+                                <div class="rect4"></div>\
+                                <div class="rect5"></div>\
+                            </div>\
+        ')
+
+        $.get(loginUrl, {username: usernameText}, function(data){
+            $('#error').text("")
+
+            signedIn = 1
+            username = usernameText
+            flightLinks = $.parseJSON(data)
+            var length = Object.keys(flightLinks).length;
+
+            $('#login').html('')
+	        setupFileInput()
+            setupFlightList()
+
+        }).fail(function(data){
+                $('#spinner').html('')
+                var errorCode = data['status']
+                if (errorCode == 400){
+                    $('#error').text("User does not exist.")
+                }
+                else if (errorCode = 401){
+                    $('#error').text("No stored flights.")
+                }
+        });
+    }
+
+    function topFunction() {
+        document.body.scrollTop = 0; // For Safari
+        document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
+    }
+
+</script>

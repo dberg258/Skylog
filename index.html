@@ -1,0 +1,166 @@
+
+<head>
+  	<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+	<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+	<link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+	<script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+	<link rel="stylesheet" href="/Users/Daniel/Documents/SkyWatch/skylog/web/style.css"></style>
+	<title>Skylog Dashboard</title>
+
+</head>
+
+
+<body>
+
+	<div class="mdl-card__title">
+	    <h2 class="mdl-card__title-text">Skylog Dashboard</h2>
+	</div>
+	<div class="mdl-card__actions mdl-card--border">
+	    <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label" style="width: 40%">
+		    <input class="mdl-textfield__input" type="text" id="filepath">
+		    <label class="mdl-textfield__label" for="sample3">File Path</label>
+		</div>		
+	    <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label" style="width: 40%">
+		    <input class="mdl-textfield__input" type="text" id="lambda">
+		    <label class="mdl-textfield__label" for="sample3">Enter Lambda</label>
+		</div>		
+	    <a onclick="getElements()" class="mdl-button mdl-button--colored mdl-js-button mdl-js-ripple-effect">
+	      Go
+	    </a>
+	</div>
+	<div class="mdl-card__actions mdl-card--border">
+	    <label id="error"></label>	
+	</div>
+	<div class="mdl-card__menu">
+	    <button class="mdl-button mdl-button--icon mdl-js-button mdl-js-ripple-effect">
+	      <img src="file://Users/Daniel/Documents/SkyWatch/skylog/web/skywatch-small.png"></img>
+	    </button>
+	</div>
+	<div id="graph" style="float: right; width: 50%"></div>
+  	<div id="map" style="float: left; width: 50%"></div>
+	<br/>
+	<div style="overflow-x: auto; width: 100%;" >
+	<table class="mdl-data-table mdl-js-data-table" style="float: center; visibility: hidden; margin-left: 10px; margin-right: 10px" id="metadata-table">
+	  <thead>
+	    <tr id="metadata-header">
+	    </tr>
+	  </thead>
+	  <tbody>
+	    <tr id="metadata-body">
+
+	    </tr>
+	  </tbody>
+	</table>
+	</div>
+</body>
+
+  <script>
+		lats = null;
+		longs = null
+		isHovering = false
+		markedPoint = {
+			   		type: 'scattermapbox',
+			   		mode: 'markers',
+			   		hoverinfo: 'text',
+			   		marker: {
+			   			size: 15,
+			   			symbol: 'monument'
+			   		},
+				   	lat: null,
+				   	lon: null,
+				   	name: 'Hover Dot'
+				   }
+		<!--url = "http://13.90.242.96/skylog_request"-->
+        url = "http://localhost:8890/skylog_request"
+		function setupGraph(data, layout){
+			Plotly.purge('graph')
+			Plotly.plot('graph', data, layout);
+
+			var graph = document.getElementById('graph')
+			graph.on('plotly_hover', function(data){
+				   if (longs == undefined || lats == undefined){
+				   		return;
+				   }
+				   markedLong = longs[data.points[0].pointNumber]
+				   markedLat = lats[data.points[0].pointNumber]
+				   markedPoint.lat = [markedLat]
+				   markedPoint.lon = [markedLong]
+				   
+				   if (isHovering){
+				   		Plotly.deleteTraces('map', -1)
+				   }
+				   isHovering = true
+
+				   Plotly.addTraces('map', markedPoint)
+			});
+		}
+
+		function setupMap(data, layout){
+			Plotly.purge('map');
+			Plotly.plot('map', data, layout);
+
+			console.log(data)
+			if (data != undefined && data[0] != undefined && 'lon' in data[0] && 'lat' in data[0]){
+				longs = data[0]['lon'];
+				lats = data[0]['lat'];
+			}
+			else{
+				longs = undefined;
+				lats = undefined;
+			}
+		}
+
+		function setupMetadataTable(metadata){
+			var header = ''
+			var body = ''
+			var printable = ''
+			for (var i = 0 ; i < metadata.length ; i++){
+				header += '<th class="mdl-data-table__cell--non-numeric" style="text-align: center">' + metadata[i][0] + '</th>'
+				body += '<td class="mdl-data-table__cell--non-numeric" style="text-align: center">' + metadata[i][1] + '</td>'
+				printable += metadata[i][0] + ': ' + metadata[i][1] + '\n'
+			}
+			$('#metadata-header').html(header)
+			$('#metadata-body').html(body)
+
+			$('#metadata-table').css('visibility', 'visible');
+
+			console.log(printable)
+		}
+
+		function getElements(){
+
+				lambdaText = $('#lambda').val()
+				filePath = $('#filepath').val()
+				isHovering = false
+
+				$('#error').text('')
+
+				$.get(url, {lambda: lambdaText, filepath: filePath}, function(data){
+					
+					obj = $.parseJSON(data)
+					graph_data = obj['graph']
+					setupGraph(graph_data['data'], graph_data['layout'])
+
+					setupMetadataTable(obj['safety-metadata'])
+
+					map_data = obj['map']
+					setupMap(map_data['data'], map_data['layout'])
+
+
+				}).fail(function(data){
+					var errorCode = data['status']
+					if (errorCode == 400){
+						$('#error').text("File could not be found")
+					}
+					else if (errorCode == 401){
+						$('#error').text("Error with lambda expression")
+					}
+					else{
+						$('#error').text("Server isn't available..")
+					}	
+				});
+				
+	  	}
+
+  </script>
