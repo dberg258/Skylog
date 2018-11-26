@@ -1,6 +1,8 @@
 # Skylog
 Drone Flight Log Analyzer
 
+!!! Not all functionallity is available as certain databases are on servers I no longer have access to. 
+
 This is a web-appication for viewing and analyzing DJI flight logs. 
 
 The html is contained in index.html and indexLogin.html. 
