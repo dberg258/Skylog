@@ -1,9 +1,11 @@
 # Skylog
-Drone flight-log Analyzer: This is a web-appication for viewing and analyzing DJI flight logs. 
+Drone flight-log Analyzer: This is a web-appication for viewing and analyzing DJI flight logs.
+
+![](https://i.imgur.com/kia7yNo.png)
+
 * skylog_dash.py contains a Tornado server which must be running in order for the web application to function. 
 * The html is contained in index.html and indexLogin.html
 
-![](https://i.imgur.com/kia7yNo.png)
 
 # Using the webpage:
   
